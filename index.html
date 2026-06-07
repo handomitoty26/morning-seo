@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>기숙사 아침 점호(여학생용)</title>
+    <!-- PWA 설정 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0288d1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="서현관아침점호v1">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* 안드로이드 최적화: 화면 잘림 방지를 위한 Flexbox 구조 완벽 적용 */
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        
+        html, body {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; height: 100%; margin: 0; padding: 0;
+            overflow: hidden; background-color: #f4f6f9;
+            font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
+            user-select: none; touch-action: none;
+        }
+        
+        .app-container {
+            display: flex; flex-direction: column; align-items: center;
+            width: 100%; height: 100%; padding: 10px 15px 20px 15px; 
+        }
+        
+        /* 1. 상단 메뉴 바 (크기 고정) */
+        .top-menu { 
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; 
+            width: 100%; max-width: 600px; margin-bottom: 12px; flex-shrink: 0; 
+        }
+        .menu-btn {
+            padding: 12px 2px; border-radius: 10px; border: none; font-size: 14px; font-weight: 900; 
+            background: #ffffff; color: #2c3e50; box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+            text-align: center; cursor: pointer; letter-spacing: -0.5px;
+        }
+        .menu-btn:active { background: #ecf0f1; transform: scale(0.98); }
+        
+        /* 2. 중앙 상태창 (크기 고정) */
+        .display-area { flex-shrink: 0; width: 100%; max-width: 600px; text-align: center; margin-bottom: 10px; }
+        .display { 
+            width: 100%; height: 80px; background: white; border: 3px solid #3498db; border-radius: 15px; 
+            font-size: 55px; font-weight: 900; color: #2980b9; line-height: 75px; 
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); letter-spacing: 5px; margin-bottom: 8px;
+        }
+        .status-box {
+            background: #ffffff; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: bold;
+            color: #7f8c8d; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px dashed #bdc3c7;
+        }
+        .status-box.active { background: #e8f5e9; border: 1px solid #27ae60; color: #27ae60; }
+
+        /* 3. 대형 키패드 (남는 공간 꽉 채움) */
+        .keypad { 
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; 
+            width: 100%; max-width: 600px; flex-grow: 1; min-height: 0; 
+        }
+        .kp-btn { 
+            background: #ffffff; border: none; border-radius: 15px; font-size: 40px; font-weight: 800; 
+            color: #2c3e50; width: 100%; height: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.08); 
+            cursor: pointer; transition: background 0.1s, transform 0.1s;
+        }
+        .kp-btn.pressed { transform: scale(0.95); background: #ecf0f1; }
+        .btn-enter { background: #27ae60; color: white; font-size: 28px; }
+        .btn-enter.pressed { background: #219150; }
+        .btn-clear { background: #e74c3c; color: white; font-size: 24px; }
+        .btn-clear.pressed { background: #c0392b; }
+
+        /* 모달창 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 25px; border-radius: 15px; width: 90%; max-width: 450px; font-size: 15px; line-height: 1.5; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .scrollable-content { overflow-y: auto; max-height: 65vh; padding-right: 5px; }
+        .modal-content h2 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 12px; font-weight: 900; font-size: 19px; text-align: center; }
+        .close-btn { display: block; width: 100%; padding: 15px; margin-top: 15px; background: #a0aec0; color: white; border-radius: 10px; font-weight: bold; border: none; font-size: 16px; cursor: pointer; }
+        .save-btn { background: #2980b9; color: white; width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: bold; margin-bottom: 8px; cursor: pointer; }
+        
+        /* 📅 달력 UI 스타일 */
+        .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-weight: 900; font-size: 18px; color: #2c3e50; }
+        .cal-nav-btn { background: transparent; border: none; font-size: 20px; font-weight: bold; color: #3498db; cursor: pointer; padding: 5px 15px; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; }
+        .cal-day-name { font-size: 13px; color: #7f8c8d; font-weight: bold; padding-bottom: 5px; border-bottom: 1px solid #ecf0f1; margin-bottom: 5px; }
+        .cal-day { width: 100%; padding: 12px 0; border-radius: 8px; background: #f8f9fa; color: #bdc3c7; font-size: 15px; font-weight: bold; font-family: inherit; border: none; -webkit-appearance: none; appearance: none; }
+        .cal-day.has-record { background: #3498db; color: white; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); touch-action: manipulation; -webkit-tap-highlight-color: rgba(0,0,0,0.1); }
+        .cal-day.has-record:active { background: #2980b9; transform: scale(0.95); }
+
+        /* 시각 피드백: 토스트 팝업 */
+        .toast-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 2000; pointer-events: none;
+            opacity: 0; transition: opacity 0.2s ease-in-out;
+        }
+        .toast-overlay.show { opacity: 1; }
+        .toast-content {
+            padding: 25px 35px; border-radius: 20px; font-size: 45px; font-weight: 900;
+            color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.2); text-align: center;
+            transform: scale(0.8); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            white-space: nowrap;
+        }
+        .toast-overlay.show .toast-content { transform: scale(1); }
+        .toast-success { background: rgba(39, 174, 96, 0.95); }
+        .toast-warning { background: rgba(243, 156, 18, 0.95); }
+        .toast-danger { background: rgba(192, 57, 43, 0.95); }
+    </style>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('sw.js')
+            .then(function(reg) { console.log('SW registered'); })
+            .catch(function(err) { console.log('SW error', err); });
+        });
+      }
+    </script>
+</head>
+<body>
+
+    <div id="toastOverlay" class="toast-overlay">
+        <div id="toastContent" class="toast-content toast-success">출석 완료!!</div>
+    </div>
+
+    <input type="file" id="excelFile" accept=".xlsx, .xls" style="display:none;">
+    <input type="file" id="importSyncFile" accept=".json, .txt" style="display:none;">
+    <input type="file" id="restoreExcelFile" accept=".xlsx, .xls" style="display:none;">
+
+    <div class="app-container">
+        <div class="top-menu">
+            <button class="menu-btn" style="background:#e8f8f5; color:#16a085;" onclick="unlockAudio(); document.getElementById('excelFile').click()">📁 당일 명단 등록</button>
+            <button class="menu-btn" onclick="openTimeSettings()">⏰ 기준 시간 설정</button>
+            <button class="menu-btn" style="background:#2980b9; color:white;" onclick="showResults()">📊 당일 점호 종료</button>
+            
+            <button class="menu-btn" style="background:#fef9e7; color:#d35400;" onclick="exportSyncData()">📤 동기화(내보내기)</button>
+            <button class="menu-btn" style="background:#fef9e7; color:#d35400;" onclick="document.getElementById('importSyncFile').click()">📥 동기화(가져오기)</button>
+            <button class="menu-btn" style="background:#f4ecf7; color:#8e44ad;" onclick="openHistoryMenu()">🗂️ 기록/백업 관리</button>
+        </div>
+
+        <div class="display-area">
+            <div class="display" id="display"></div>
+            <div class="status-box" id="statusMsg" style="color: #e74c3c;">학생 명단(엑셀)을 먼저 등록해주세요.</div>
+        </div>
+
+        <div class="keypad">
+            <button class="kp-btn" data-val="7">7</button>
+            <button class="kp-btn" data-val="8">8</button>
+            <button class="kp-btn" data-val="9">9</button>
+            <button class="kp-btn" data-val="4">4</button>
+            <button class="kp-btn" data-val="5">5</button>
+            <button class="kp-btn" data-val="6">6</button>
+            <button class="kp-btn" data-val="1">1</button>
+            <button class="kp-btn" data-val="2">2</button>
+            <button class="kp-btn" data-val="3">3</button>
+            <button class="kp-btn btn-clear" data-val="clear">지우기</button>
+            <button class="kp-btn" data-val="0">0</button>
+            <button class="kp-btn btn-enter" data-val="enter">Enter</button>
+        </div>
+    </div>
+
+    <div class="modal" id="resultModal">
+        <div class="modal-content">
+            <h2 id="modalTitle">알림</h2>
+            <div id="modalBody" class="scrollable-content"></div>
+            <button class="close-btn" onclick="closeModal()">닫기</button>
+        </div>
+    </div>
+
+    <script>
+        let studentsInfo = {};
+        let absentList = [];
+        let attendanceLog = {}; 
+        let currentInput = "";
+        let audioInitialized = false; 
+        
+        let LATE_HOUR = 6, LATE_MIN = 45, END_HOUR = 7, END_MIN = 0;
+        let currentDateStr = new Date().toISOString().split('T')[0];
+
+        // 📅 달력 전용 변수
+        let calYear = new Date().getFullYear();
+        let calMonth = new Date().getMonth() + 1;
+        let calAvailableDates = [];
+        let calMode = 'local';
+
+        const displayEl = document.getElementById('display');
+        const statusEl = document.getElementById('statusMsg');
+
+        // 안드로이드 튕김/스크롤 강제 차단
+        document.addEventListener('touchmove', function(e) {
+            // [버그수정10] 모달 내부 또는 스크롤 가능 영역에서는 터치 허용
+            if (!e.target.closest('.scrollable-content') && !e.target.closest('.modal-content')) e.preventDefault(); 
+        }, { passive: false });
+
+        document.body.addEventListener('click', function(e) {
+            if(e.target.tagName === 'BUTTON' || e.target.classList.contains('menu-btn')) {
+                e.target.blur(); 
+            }
+        });
+
+        // ==========================================
+        // [버그 수정 완료] null 발생 원인 제거 (data-val 속성 사용)
+        // ==========================================
+        const kpButtons = document.querySelectorAll('.kp-btn');
+        kpButtons.forEach(btn => {
+            const triggerBtn = function(e) {
+                if(e.type === 'touchstart' && e.cancelable) e.preventDefault(); 
+                
+                btn.classList.add('pressed');
+                setTimeout(() => btn.classList.remove('pressed'), 100);
+
+                const val = btn.getAttribute('data-val');
+                if(!val) return; // 방어 코드 (null 방지)
+
+                if(val === 'clear') clearInput();
+                else if(val === 'enter') submitId();
+                else inputNum(val);
+            };
+            btn.addEventListener('touchstart', triggerBtn, {passive: false});
+            btn.addEventListener('mousedown', function(e) {
+                if(e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return; 
+                triggerBtn(e);
+            });
+        });
+
+        window.onload = function() {
+            const savedTime = localStorage.getItem('rollcall_timeSettings');
+            if (savedTime) {
+                const ts = JSON.parse(savedTime);
+                LATE_HOUR = ts.lateH; LATE_MIN = ts.lateM; END_HOUR = ts.endH; END_MIN = ts.endM;
+            }
+        };
+
+        function unlockAudio() {
+            if (!audioInitialized && 'speechSynthesis' in window) {
+                let utterance = new SpeechSynthesisUtterance(""); utterance.volume = 0; 
+                window.speechSynthesis.speak(utterance); audioInitialized = true;
+            }
+        }
+
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel(); 
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ko-KR'; utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        let toastTimeout;
+        function showToast(text, typeClass) {
+            const overlay = document.getElementById('toastOverlay');
+            const content = document.getElementById('toastContent');
+            content.innerText = text; content.className = `toast-content ${typeClass}`;
+            overlay.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => { overlay.classList.remove('show'); }, 1000);
+        }
+
+        // ==========================================
+        // 1. 당일 명단 엑셀 등록
+        // ==========================================
+        document.getElementById('excelFile').addEventListener('change', function(e) {
+            const file = e.target.files[0]; if (!file) return;
+            
+            // [버그수정1] 4자리 연도만 허용, 단어경계으로 오매칭 방지, 유효 날짜 검증 추가
+            const dateMatch = file.name.match(/(?<![0-9])(\d{4})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?![0-9])/);
+            if (dateMatch) { 
+                const [, year, month, day] = dateMatch;
+                const testDate = new Date(`${year}-${month}-${day}`);
+                // 윤년 검증: Date가 다른 날짜로 자동 보정되었는지 확인
+                if (!isNaN(testDate.getTime()) 
+                    && testDate.getUTCFullYear() === parseInt(year)
+                    && testDate.getUTCMonth() + 1 === parseInt(month)
+                    && testDate.getUTCDate() === parseInt(day)) {
+                    currentDateStr = `${year}-${month}-${day}`;
+                } else {
+                    currentDateStr = new Date().toISOString().split('T')[0];
+                }
+            } else { 
+                currentDateStr = new Date().toISOString().split('T')[0]; 
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result); const workbook = XLSX.read(data, {type: 'array'});
+                    studentsInfo = {}; absentList = []; attendanceLog = {};
+                    
+                    // 여학생용 프로그램으로 시트 이름 연동 변경
+                    const assignSheetName = workbook.Sheets['여학생방배정'] ? '여학생방배정' : (workbook.Sheets['학번순방배정공지'] ? '학번순방배정공지' : null);
+                    
+                    if(assignSheetName) {
+                        const assignData = XLSX.utils.sheet_to_json(workbook.Sheets[assignSheetName], {header: 1});
+                        assignData.forEach(row => {
+                            if(!row) return;
+                            row.forEach((cell, idx) => {
+                                const val = String(cell).trim();
+                                if (/^\d{4}$/.test(val)) { 
+                                    const name = String(row[idx+1] || '').trim();
+                                    const room = String(row[idx+2] || '').trim();
+                                    if (name && name !== 'undefined' && name !== 'NaN') studentsInfo[val] = { name: name, room: room };
+                                }
+                            });
+                        });
+                    }
+
+                    if(workbook.Sheets['기숙사입실현황']) {
+                        // [버그수정2] studentsInfo 로드가 완료된 후에 부재자를 처리하므로
+                        // studentsInfo에 없는 학번(전출자 등)은 absentList에 추가하지 않음
+                        const statusData = XLSX.utils.sheet_to_json(workbook.Sheets['기숙사입실현황'], {header: 1});
+                        statusData.forEach(row => {
+                            if(!row) return;
+                            row.forEach(cell => {
+                                const val = String(cell).trim();
+                                if (/^\d{4}$/.test(val) && studentsInfo[val]) absentList.push(val); 
+                            });
+                        });
+                    }
+                    
+                    absentList = [...new Set(absentList)];
+                    const total = Object.keys(studentsInfo).length;
+                    const absentCount = absentList.length;
+                    const targetCount = total - absentCount;
+
+                    // [버그수정8] 명단이 비어있으면 사용자에게 명확히 알림
+                    if (total === 0) {
+                        statusEl.innerHTML = `<span style="color:#e74c3c">❌ 명단을 읽지 못했습니다. 시트 이름과 학번/이름/호실 컬럼 구조를 확인해주세요.</span>`;
+                        statusEl.classList.remove('active');
+                        speak("명단을 읽지 못했습니다.");
+                        return;
+                    }
+
+                    statusEl.innerHTML = `📅 [${currentDateStr}] 로드 완료<br><span style="color:#2c3e50;">총원 ${total}명 / 부재 ${absentCount}명 / 점호대상 ${targetCount}명</span>`;
+                    statusEl.classList.add('active');
+                    speak("데이터 연결이 완료되었습니다. 점호를 시작합니다.");
+                } catch (error) { alert("엑셀 데이터를 읽지 못했습니다. 파일 구조를 확인해주세요."); }
+                document.getElementById('excelFile').value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        // ==========================================
+        // 2. 동기화 (내보내기 / 가져오기) - 원터치 퀵쉐어 (.txt)
+        // ==========================================
+        async function exportSyncData() {
+            if(Object.keys(attendanceLog).length === 0) { alert("동기화할 출석 기록이 없습니다."); return; }
+            
+            try {
+                const dataStr = JSON.stringify(attendanceLog);
+                
+                // 안드로이드가 공유창을 띄우기 가장 좋아하는 포맷인 .txt로 강제 변환
+                const fileName = `점호동기화_${currentDateStr}.txt`;
+                const blob = new Blob([dataStr], { type: 'text/plain' });
+                
+                // File 객체 생성 (안드로이드 공유 시트 호환성)
+                let file = null;
+                try { 
+                    file = new File([blob], fileName, { type: 'text/plain' }); 
+                } catch (e) { 
+                    file = null; 
+                }
+
+                // [v1.5] 1순위: navigator.share (퀵쉐어 / 카톡 / 메신저 시트)
+                // 안드로이드는 canShare({files})가 false라도 share() 자체는 가능하므로
+                // 두 단계로 시도: (a) 파일 공유, (b) 파일 공유 불가 시 텍스트 공유
+                if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({ 
+                            title: '기숙사 점호 동기화', 
+                            text: `점호동기화_${currentDateStr}`,
+                            files: [file] 
+                        });
+                        return; // 공유 성공 (퀵쉐어/메신저 전송 완료)
+                    } catch (err) {
+                        if (err.name === 'AbortError') return; // 사용자가 공유 시트 취소
+                        // NotAllowedError, DataError 등은 다음 단계로 폴백
+                        console.warn('파일 공유 실패, 폴백 시도:', err.name, err.message);
+                    }
+                }
+                
+                // [v1.5] 2순위: showSaveFilePicker로 사용자가 저장 위치 직접 선택 (퀵쉐어 폴더 등)
+                const result = await saveFileWithPicker(blob, fileName, 'txt');
+                if (result.aborted) return;
+                if (!result.success) { alert("저장 실패: " + (result.error || "알 수 없는 오류")); return; }
+                
+                if (result.picker) {
+                    alert(`동기화 파일이 선택한 경로에 저장되었습니다.\n파일명: ${result.savedName || fileName}\n\n파일 앱에서 파일을 길게 눌러 퀵쉐어로 메인 기기에 전송하거나, 메인 기기에서 [동기화 파일 가져오기]로 불러오세요.`);
+                } else {
+                    alert(`동기화 파일이 다운로드 폴더에 저장되었습니다.\n파일명: ${fileName}\n\n파일 앱에서 파일을 길게 눌러 퀵쉐어로 메인 기기에 전송하세요.`);
+                }
+            } catch (err) { alert("내보내기 중 오류가 발생했습니다: " + err.message); }
+        }
+
+        // [v1.4 신규] 사용자가 저장 위치와 파일명을 직접 선택 가능한 저장 함수
+        // showSaveFilePicker API를 우선 시도, 미지원 시 다운로드 폴더로 폴백
+        // [모바일 수정] 모바일(안드로이드/iOS) 여부 — File System Access 쓰기가 불안정한 환경
+        function isMobileDevice() {
+            try { if (navigator.userAgentData && navigator.userAgentData.mobile) return true; } catch(e) {}
+            let ua = navigator.userAgent || "";
+            if (/Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(ua)) return true;
+            try {
+                let coarseOnly = window.matchMedia && window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(pointer: fine)').matches;
+                if ((navigator.maxTouchPoints || 0) > 0 && coarseOnly) return true;
+            } catch(e) {}
+            return false;
+        }
+
+        async function saveFileWithPicker(blob, fileName, fileKind) {
+            if (!blob || blob.size === 0) { alert("내부 오류: 저장할 데이터가 비어 있습니다. (0 bytes)"); return { success: false, aborted: true }; }
+            // fileKind: 'xlsx' | 'txt'
+            if (!isMobileDevice() && window.showSaveFilePicker) {
+                try {
+                    const pickerOptions = {
+                        suggestedName: fileName,
+                        types: fileKind === 'xlsx' ? [{
+                            description: 'Excel 파일',
+                            accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
+                        }] : [{
+                            description: '텍스트 파일',
+                            accept: { 'text/plain': ['.txt'] }
+                        }]
+                    };
+                    const handle = await window.showSaveFilePicker(pickerOptions);
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    return { success: true, savedName: handle.name, picker: true };
+                } catch (e) {
+                    if (e.name === 'AbortError') return { success: false, aborted: true };
+                    // showSaveFilePicker 실패 시 다운로드 폴더로 폴백
+                }
+            }
+            // 폴백: 기존 다운로드 방식 (다운로드 폴더로 저장)
+            try {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { try { document.body.removeChild(a); } catch(e){} URL.revokeObjectURL(url); }, 15000);
+                return { success: true, savedName: fileName, fallback: true };
+            } catch(e) {
+                return { success: false, error: e.message };
+            }
+        }
+
+        function forceDownload(blob, fileName) {
+            try {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = fileName; a.rel = "noopener";
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { try { document.body.removeChild(a); } catch(e){} URL.revokeObjectURL(url); }, 15000);
+                alert(`공유 창을 열 수 없어 파일로 저장되었습니다.\n(파일명: ${fileName})\n내 파일 앱에서 파일을 길게 눌러 공유해주세요.`);
+            } catch(e) { alert("파일 저장에 실패했습니다."); }
+        }
+
+        document.getElementById('importSyncFile').addEventListener('change', function(e) {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    // 명단이 등록되지 않은 상태에서 가져오기 차단
+                    if(Object.keys(studentsInfo).length === 0) {
+                        alert("먼저 당일 엑셀 명단을 등록한 후 동기화 파일을 가져오세요.");
+                        document.getElementById('importSyncFile').value = '';
+                        return;
+                    }
+                    
+                    // [v1.5 버그수정] JSON 파싱 결과가 평범한 객체인지 검증
+                    // (배열, null, 숫자 등은 거부 → Object.entries에서 의미 없는 값 또는 오류 방지)
+                    const parsed = JSON.parse(e.target.result);
+                    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                        alert("올바른 동기화 파일이 아닙니다. (형식 오류)");
+                        document.getElementById('importSyncFile').value = '';
+                        return;
+                    }
+                    
+                    // [v1.5 버그수정] 사전부재자가 동기화 파일에 포함되어 있어도 무시
+                    // (보조 태블릿에서 부재자 데이터가 잘못 섞이는 경우 이중 집계 방지)
+                    const filteredLog = {};
+                    let invalidIdCount = 0;
+                    let absentBlockedCount = 0;
+                    let conflictCount = 0;
+                    let conflictList = [];
+                    
+                    for (const [id, status] of Object.entries(parsed)) {
+                        // 유효한 상태값이 아니면 무시
+                        if (status !== '정상' && status !== '점호지각' && status !== '점호불참') continue;
+                        // 명단에 없는 학번 무시
+                        if (!studentsInfo[id]) { invalidIdCount++; continue; }
+                        // 사전부재자는 무시 (이중 집계 방지)
+                        if (absentList.includes(id)) { absentBlockedCount++; continue; }
+                        // 양쪽에서 입력된 학생 추적
+                        if (attendanceLog[id] && attendanceLog[id] !== status) {
+                            conflictCount++;
+                            conflictList.push(`${id} ${studentsInfo[id].name}: ${attendanceLog[id]} → ${status}`);
+                        }
+                        filteredLog[id] = status;
+                    }
+                    
+                    attendanceLog = { ...attendanceLog, ...filteredLog };
+                    const mergedCount = Object.keys(filteredLog).length;
+                    
+                    // 결과 메시지 (운영자가 충돌/필터 상황을 정확히 파악할 수 있도록)
+                    let msg = `보조 기기 데이터 병합 완료\n\n✓ 병합: ${mergedCount}명`;
+                    if (conflictCount > 0) {
+                        msg += `\n⚠ 충돌(덮어씀): ${conflictCount}명`;
+                        if (conflictList.length <= 5) {
+                            msg += `\n   ${conflictList.join('\n   ')}`;
+                        } else {
+                            msg += `\n   ${conflictList.slice(0, 5).join('\n   ')}\n   ... 외 ${conflictList.length - 5}명`;
+                        }
+                    }
+                    if (invalidIdCount > 0) msg += `\n✗ 미등록 학번: ${invalidIdCount}건 무시`;
+                    if (absentBlockedCount > 0) msg += `\n✗ 사전부재자: ${absentBlockedCount}건 무시`;
+                    alert(msg);
+                } catch(err) { alert("올바른 동기화 파일이 아닙니다.\n(" + err.message + ")"); }
+                document.getElementById('importSyncFile').value = '';
+            };
+            reader.readAsText(file);
+        });
+
+        // ==========================================
+        // 3. 📅 달력 UI 생성 및 제어 로직
+        // ==========================================
+        function buildCalendarHTML() {
+            const firstDay = new Date(calYear, calMonth - 1, 1).getDay(); 
+            const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+
+            let html = `
+                <div class="cal-header">
+                    <button class="cal-nav-btn" onclick="changeMonth(-1)">◀</button>
+                    <span>${calYear}년 ${calMonth}월</span>
+                    <button class="cal-nav-btn" onclick="changeMonth(1)">▶</button>
+                </div>
+                <div class="cal-grid">
+            `;
+            
+            const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+            dayNames.forEach((d, i) => {
+                let color = i===0 ? '#e74c3c' : (i===6 ? '#3498db' : '#7f8c8d');
+                html += `<div class="cal-day-name" style="color:${color};">${d}</div>`;
+            });
+
+            for (let i = 0; i < firstDay; i++) html += `<div></div>`;
+
+            for (let i = 1; i <= daysInMonth; i++) {
+                let mStr = String(calMonth).padStart(2, '0');
+                let dStr = String(i).padStart(2, '0');
+                let fullDate = `${calYear}-${mStr}-${dStr}`;
+
+                if (calAvailableDates.includes(fullDate)) {
+                    html += `<button type="button" class="cal-day has-record" data-cal-date="${fullDate}">${i}</button>`;
+                } else {
+                    html += `<div class="cal-day">${i}</div>`;
+                }
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        function changeMonth(delta) {
+            calMonth += delta;
+            if(calMonth < 1) { calMonth = 12; calYear--; }
+            if(calMonth > 12) { calMonth = 1; 기calYear++; }
+            document.getElementById('calendar-container').innerHTML = buildCalendarHTML();
+        }
+
+        function selectCalDate(dateStr) {
+            if (calMode === 'local') viewHistoryDirect(dateStr);
+            else viewRestoredHistoryDirect(dateStr);
+        }
+
+        // [모바일 수정] 달력 날짜 탭 위임 처리(인라인 onclick 미동작 환경 대비, 1회 등록)
+        if (!window.__calDateDelegationBound) {
+            document.addEventListener('click', function(ev){
+                let cell = ev.target.closest && ev.target.closest('[data-cal-date]');
+                if (cell) selectCalDate(cell.getAttribute('data-cal-date'));
+            });
+            window.__calDateDelegationBound = true;
+        }
+
+        // ==========================================
+        // 4. 기록 및 백업 관리
+        // ==========================================
+        function openHistoryMenu() {
+            let keys = Object.keys(localStorage).filter(k => k.startsWith('rollcall_history_'));
+            calAvailableDates = keys.map(k => k.replace('rollcall_history_', ''));
+            calMode = 'local';
+
+            if(calAvailableDates.length > 0) {
+                let latestDate = calAvailableDates.sort().reverse()[0];
+                calYear = parseInt(latestDate.split('-')[0]);
+                calMonth = parseInt(latestDate.split('-')[1]);
+            } else {
+                let now = new Date();
+                calYear = now.getFullYear();
+                calMonth = now.getMonth() + 1;
+            }
+
+            let html = `
+                <div style="background: #fdf2e9; padding: 15px; border-radius: 10px; border: 1px solid #f8c471; text-align: center; margin-bottom: 15px;">
+                    <div style="font-weight: 900; color: #d35400; margin-bottom: 12px; font-size: 16px;">💾 엑셀 백업 및 뷰어</div>
+                    <button class="save-btn" style="background:#27ae60;" onclick="showBackupOptions()">📥 엑셀 파일로 백업하기</button>
+                    <button class="save-btn" style="background:#8e44ad; margin-bottom:0;" onclick="document.getElementById('restoreExcelFile').click()">📂 백업 엑셀 파일 불러오기</button>
+                </div>
+                
+                <div style="background: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
+                    <div style="font-weight: 900; color: #2c3e50; margin-bottom: 5px; text-align:center;">📅 기기 저장 기록 달력</div>
+                    <div style="font-size: 12px; color: #7f8c8d; text-align:center; margin-bottom: 15px;">파란색으로 표시된 날짜를 터치하면 기록을 봅니다.</div>
+                    <div id="calendar-container">
+                        ${buildCalendarHTML()}
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalTitle').innerText = "🗂️ 기록/백업 관리";
+            document.getElementById('modalBody').innerHTML = html;
+            document.getElementById('resultModal').style.display = 'flex';
+        }
+
+        function viewHistoryDirect(dateVal) {
+            const dataStr = localStorage.getItem(`rollcall_history_${dateVal}`);
+            if(!dataStr) { alert("오류: 데이터가 존재하지 않습니다."); return; }
+            renderHistoryHtml(JSON.parse(dataStr), dateVal, true);
+        }
+
+        function showBackupOptions() {
+            // [v1.4 변경] 경로 선택 기능 안내 추가
+            const supportPicker = !!window.showSaveFilePicker;
+            const pickerNote = supportPicker
+                ? `<div style="background:#e8f4f8; padding:10px; border-radius:8px; margin-bottom:12px; font-size:12px; color:#2980b9; line-height:1.5;">
+                       📁 <strong>저장 위치 선택 가능</strong><br>
+                       저장 버튼을 누르면 폴더와 파일명을 직접 지정할 수 있습니다.
+                   </div>`
+                : `<div style="background:#fff3cd; padding:10px; border-radius:8px; margin-bottom:12px; font-size:12px; color:#856404; line-height:1.5;">
+                       ⚠️ 현재 브라우저는 경로 선택을 지원하지 않아 다운로드 폴더로 저장됩니다.
+                   </div>`;
+            let html = `
+                <div style="text-align:center; padding:10px;">
+                    <p style="font-weight:bold; color:#2c3e50; margin-bottom:15px; font-size:15px;">엑셀 백업 방식을 선택해주세요.</p>
+                    ${pickerNote}
+                    <button class="save-btn" style="background:#27ae60; padding:15px;" onclick="executeBackup(false)">📥 기본 파일명으로 저장<br><span style="font-weight:normal; font-size:12px; opacity:0.9;">(연도_아침점호_기록백업.xlsx)</span></button>
+                    <button class="save-btn" style="background:#f39c12; padding:15px;" onclick="executeBackup(true)">📤 타임스탬프 추가하여 저장<br><span style="font-weight:normal; font-size:12px; opacity:0.9;">(파일명에 날짜·시간 자동 추가)</span></button>
+                    <button class="save-btn" style="background:#a0aec0; padding:15px; margin-top:10px;" onclick="openHistoryMenu()">취소</button>
+                </div>
+            `;
+            document.getElementById('modalTitle').innerText = "💾 엑셀 파일로 백업하기";
+            document.getElementById('modalBody').innerHTML = html;
+        }
+
+        async function executeBackup(isSaveAs) {
+            try {
+                const keys = Object.keys(localStorage).filter(k => k.startsWith('rollcall_history_')).sort();
+                if(keys.length === 0) { alert("백업할 데이터가 없습니다."); return; }
+                
+                let ws_data = [["일자", "총원", "사전부재", "점호대상", "정상출석", "점호지각", "점호불참", "지각자명단", "불참자명단"]];
+                
+                keys.forEach(k => {
+                    const data = JSON.parse(localStorage.getItem(k));
+                    ws_data.push([
+                        data.date, data.total, data.absent, data.target,
+                        data.present, data.late, data.missing,
+                        data.lateList ? data.lateList.join(", ") : "",
+                        data.missingList ? data.missingList.join(", ") : ""
+                    ]);
+                });
+
+                let ws = XLSX.utils.aoa_to_sheet(ws_data);
+                ws['!cols'] = [{wch: 12}, {wch: 6}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 30}, {wch: 40}];
+                let wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "점호기록");
+                
+                let wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+                const year = new Date().getFullYear();
+                
+                let fileName = `${year}년_아침점호_기록백업.xlsx`;
+                if (isSaveAs) {
+                    const now = new Date();
+                    const timeStr = `${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+                    fileName = `${year}년_아침점호_기록백업_${timeStr}.xlsx`;
+                }
+                
+                // [v1.4 변경] showSaveFilePicker로 사용자가 저장 위치를 직접 선택 가능
+                const blob = new Blob([wbout], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+                const result = await saveFileWithPicker(blob, fileName, 'xlsx');
+                
+                if (result.aborted) return; // 사용자가 취소
+                if (!result.success) { alert("백업 저장에 실패했습니다: " + (result.error || "알 수 없는 오류")); return; }
+                
+                const folderMsg = result.fallback
+                    ? `📥 저장 위치: 다운로드 폴더 (브라우저가 경로 선택을 지원하지 않음)`
+                    : `📁 선택하신 경로에 저장되었습니다.`;
+                alert(`성공적으로 백업되었습니다!\n\n파일명: ${result.savedName || fileName}\n${folderMsg}`);
+            } catch (err) { alert("백업 중 오류가 발생했습니다: " + err.message); }
+        }
+
+        document.getElementById('restoreExcelFile').addEventListener('change', function(e) {
+            const file = e.target.files[0]; if(!file) return;
+            if (file.size === 0) { alert("선택한 파일의 크기가 0바이트입니다.\n클라우드 '온라인 전용' 파일이거나 동기화가 끝나지 않았을 수 있어요.\n기기에 내려받은 파일을 선택해 주세요.\n\n파일명: " + file.name); e.target.value=''; return; }
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(firstSheet);
+                    
+                    window.tempBackupData = {};
+                    calAvailableDates = [];
+                    
+                    rows.forEach(row => {
+                        if(row["일자"]) {
+                            let dateStr = String(row["일자"]);
+                            window.tempBackupData[dateStr] = {
+                                date: dateStr, total: row["총원"] || 0, absent: row["사전부재"] || 0, target: row["점호대상"] || 0,
+                                present: row["정상출석"] || 0, late: row["점호지각"] || 0, missing: row["점호불참"] || 0,
+                                lateList: row["지각자명단"] ? String(row["지각자명단"]).split(", ") : [],
+                                missingList: row["불참자명단"] ? String(row["불참자명단"]).split(", ") : []
+                            };
+                            calAvailableDates.push(dateStr);
+                        }
+                    });
+                    
+                    if(calAvailableDates.length === 0) { alert("백업 데이터가 없습니다."); return; }
+                    
+                    calMode = 'backup';
+                    let latestDate = calAvailableDates.sort().reverse()[0];
+                    calYear = parseInt(latestDate.split('-')[0]);
+                    calMonth = parseInt(latestDate.split('-')[1]);
+
+                    let html = `
+                        <div style="background: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #8e44ad; margin-bottom: 15px;">
+                            <div style="font-weight: 900; color: #8e44ad; margin-bottom: 5px; text-align:center;">📂 엑셀 백업 데이터 달력</div>
+                            <div style="font-size: 12px; color: #7f8c8d; text-align:center; margin-bottom: 15px;">파란색으로 표시된 날짜를 터치하면 기록을 봅니다.</div>
+                            <div id="calendar-container">
+                                ${buildCalendarHTML()}
+                            </div>
+                        </div>
+                        <hr style="border-top:1px dashed #ccc; margin:15px 0;">
+                        <button class="save-btn" style="background:#27ae60;" onclick="importAllRestoredData()">이 데이터를 기기에 전체 복원(저장)하기</button>
+                        <button class="save-btn" style="background:#a0aec0; margin-top:5px;" onclick="openHistoryMenu()">취소 (뒤로 가기)</button>
+                    `;
+
+                    document.getElementById('modalTitle').innerText = "엑셀 백업 뷰어";
+                    document.getElementById('modalBody').innerHTML = html;
+                    document.getElementById('resultModal').style.display = 'flex';
+                } catch(err) { alert("복원 오류: 올바른 백업 엑셀 파일인지 확인해주세요."); }
+                document.getElementById('restoreExcelFile').value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function viewRestoredHistoryDirect(dateVal) {
+            const data = window.tempBackupData[dateVal];
+            if(!data) { alert("오류: 데이터가 존재하지 않습니다."); return; }
+            renderHistoryHtml(data, dateVal, false);
+        }
+        
+        function importAllRestoredData() {
+            // [버그수정5] localStorage 용량 초과 처리
+            let successCount = 0, failCount = 0;
+            for (let dateStr in window.tempBackupData) {
+                try {
+                    localStorage.setItem(`rollcall_history_${dateStr}`, JSON.stringify(window.tempBackupData[dateStr]));
+                    successCount++;
+                } catch(err) {
+                    failCount++;
+                }
+            }
+            if (failCount > 0) {
+                alert(`복원 완료: ${successCount}건 성공, ${failCount}건 실패 (저장공간 부족)`);
+            } else {
+                alert(`과거 기록 ${successCount}건이 기기에 성공적으로 복원(저장)되었습니다.`);
+            }
+            openHistoryMenu(); 
+        }
+
+        function renderHistoryHtml(data, dateVal, isLocal) {
+            let html = `
+                <div style="background:#e8f5e9; padding:12px; border-radius:8px; margin-bottom:10px; text-align:center;">
+                    <b>총원:</b> ${data.total}명 / <b>부재:</b> ${data.absent}명 / <b>대상:</b> ${data.target}명
+                </div>
+                <strong style="color:#27ae60;">✅ 정상 출석: ${data.present}명</strong><br>
+                <strong style="color:#f39c12;">⚠️ 점호 지각: ${data.late}명</strong><br>
+                <strong style="color:#e74c3c;">🚨 점호 불참: ${data.missing}명</strong><br><br>
+            `;
+            if (data.lateList && data.lateList.length > 0) html += `<strong style="color:#f39c12;">[ 지각자 명단 ]</strong><br>${data.lateList.join("<br>")}<br><br>`;
+            if (data.missingList && data.missingList.length > 0) html += `<strong style="color:#c0392b;">[ 불참자 명단 ]</strong><br>${data.missingList.join("<br>")}`;
+            
+            html += `<hr style="margin:20px 0; border:0; border-top:1px dashed #ccc;"><button class="save-btn" style="background:#a0aec0;" onclick="${isLocal ? 'openHistoryMenu()' : 'restoreCalendarView()'}">달력으로 돌아가기</button>`;
+            
+            document.getElementById('modalTitle').innerText = `[${dateVal}] ${isLocal ? '기기 저장' : '엑셀 백업'} 기록`;
+            document.getElementById('modalBody').innerHTML = html;
+        }
+
+        function restoreCalendarView() {
+            calMode = 'backup';
+            let html = `
+                <div style="background: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #8e44ad; margin-bottom: 15px;">
+                    <div style="font-weight: 900; color: #8e44ad; margin-bottom: 5px; text-align:center;">📂 엑셀 백업 데이터 달력</div>
+                    <div style="font-size: 12px; color: #7f8c8d; text-align:center; margin-bottom: 15px;">파란색으로 표시된 날짜를 터치하면 기록을 봅니다.</div>
+                    <div id="calendar-container">${buildCalendarHTML()}</div>
+                </div>
+                <hr style="border-top:1px dashed #ccc; margin:15px 0;">
+                <button class="save-btn" style="background:#27ae60;" onclick="importAllRestoredData()">이 데이터를 기기에 전체 복원(저장)하기</button>
+                <button class="save-btn" style="background:#a0aec0; margin-top:5px;" onclick="openHistoryMenu()">취소 (뒤로 가기)</button>
+            `;
+            document.getElementById('modalTitle').innerText = "엑셀 백업 뷰어";
+            document.getElementById('modalBody').innerHTML = html;
+        }
+
+        // ==========================================
+        // 5. 기준 시간 설정
+        // ==========================================
+        function openTimeSettings() {
+            const padZero = (num) => String(num).padStart(2, '0');
+            const lateTimeStr = `${padZero(LATE_HOUR)}:${padZero(LATE_MIN)}`;
+            const endTimeStr = `${padZero(END_HOUR)}:${padZero(END_MIN)}`;
+
+            let html = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; font-weight:bold;">
+                    <span>⚠️ 지각 처리 시간</span><input type="time" id="inputLateTime" value="${lateTimeStr}" style="font-size:18px; padding:8px; border-radius:8px; border:1px solid #ccc;">
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; font-weight:bold; color:#c0392b;">
+                    <span>🚨 불참 처리 시간</span><input type="time" id="inputEndTime" value="${endTimeStr}" style="font-size:18px; padding:8px; border-radius:8px; border:1px solid #ccc;">
+                </div>
+                <button class="save-btn" onclick="saveTimeSettings()">저장하기</button>
+            `;
+            document.getElementById('modalTitle').innerText = "점호 기준 시간 설정";
+            document.getElementById('modalBody').innerHTML = html;
+            document.getElementById('resultModal').style.display = 'flex';
+        }
+
+        function saveTimeSettings() {
+            const lateVal = document.getElementById('inputLateTime').value;
+            const endVal = document.getElementById('inputEndTime').value;
+            if(lateVal && endVal) {
+                const [lH, lM] = lateVal.split(':').map(Number); const [eH, eM] = endVal.split(':').map(Number);
+                // [버그수정6] 지각 시간이 불참 시간보다 늦으면 안 됨
+                if (lH * 60 + lM >= eH * 60 + eM) {
+                    alert("지각 시간은 불참 시간보다 빨라야 합니다.");
+                    return;
+                }
+                LATE_HOUR = lH; LATE_MIN = lM; END_HOUR = eH; END_MIN = eM;
+                try {
+                    localStorage.setItem('rollcall_timeSettings', JSON.stringify({ lateH: lH, lateM: lM, endH: eH, endM: eM }));
+                } catch(err) { /* 저장 실패해도 세션에는 적용 */ }
+                alert("시간이 저장되었습니다.");
+                closeModal();
+            }
+        }
+
+        // ==========================================
+        // 6. 키패드 입력 및 출석 로직
+        // ==========================================
+        function inputNum(num) { if(currentInput.length < 5) { currentInput += num; displayEl.innerText = currentInput; } }
+        function clearInput() { currentInput = currentInput.slice(0, -1); displayEl.innerText = currentInput; }
+
+        function submitId() {
+            if(!currentInput) return;
+            const studentId = currentInput; currentInput = ""; displayEl.innerText = "";
+
+            if(Object.keys(studentsInfo).length === 0) {
+                statusEl.innerHTML = "당일 엑셀 명단을 먼저 등록하세요."; statusEl.style.color = "#e74c3c";
+                showToast("명단 없음!!", "toast-danger"); speak("엑셀 파일을 등록해주세요."); return;
+            }
+            // [버그수정9] 학번은 4자리여야 함 (1만~3자리 입력 시 오등록 방지)
+            if(!/^\d{4}$/.test(studentId)) {
+                statusEl.innerHTML = `<span style="color:#e74c3c">[${studentId}] 학번은 4자리로 입력해주세요.</span>`; 
+                showToast("자릿수 오류!!", "toast-danger"); speak("학번은 네 자리로 입력해주세요."); return;
+            }
+            if(!studentsInfo[studentId]) {
+                statusEl.innerHTML = `<span style="color:#e74c3c">[${studentId}] 등록되지 않은 학번입니다.</span>`; 
+                showToast("오류!!", "toast-danger"); speak("등록되지 않은 학번입니다."); return;
+            }
+            const name = studentsInfo[studentId].name;
+            if(absentList.includes(studentId)) {
+                statusEl.innerHTML = `<span style="color:#e67e22">[${studentId}] ${name} 학생은 부재 처리되었습니다.</span>`; 
+                showToast("부재자!!", "toast-warning"); speak("사전에 부재 처리 되었습니다."); return;
+            }
+            if(attendanceLog[studentId]) {
+                statusEl.innerHTML = `<span style="color:#8e44ad">[${studentId}] ${name} 학생은 이미 점호되었습니다.</span>`; 
+                showToast("중복!!", "toast-warning"); speak("이미 점호를 완료했습니다."); return;
+            }
+
+            const now = new Date();
+            const totalMins = now.getHours() * 60 + now.getMinutes();
+            const lateLimit = LATE_HOUR * 60 + LATE_MIN;
+            const endLimit = END_HOUR * 60 + END_MIN;
+
+            let status = "", msg = "";
+            
+            if (totalMins >= endLimit) { 
+                status = "점호불참"; msg = `<span style="color:#c0392b">${studentId} ${name} 점호불참</span>`; 
+                showToast("불참 처리!!", "toast-danger"); speak(`${name} 불참 처리되었습니다.`); 
+            }
+            else if (totalMins >= lateLimit) { 
+                status = "점호지각"; msg = `<span style="color:#f39c12">${studentId} ${name} 지각 완료</span>`; 
+                showToast("지각 완료!!", "toast-warning"); speak(`${name} 지각 출석 완료`); 
+            } 
+            else { 
+                status = "정상"; msg = `<span style="color:#27ae60">${studentId} ${name} 정상 출석</span>`; 
+                showToast("출석 완료!!", "toast-success"); speak(`${name} 출석 완료`); 
+            }
+
+            attendanceLog[studentId] = status;
+            statusEl.innerHTML = msg;
+        }
+
+        // ==========================================
+        // 7. 당일 결과 확인 및 저장
+        // ==========================================
+        function showResults() {
+            if(Object.keys(studentsInfo).length === 0) { alert("등록된 데이터가 없습니다."); return; }
+            const total = Object.keys(studentsInfo).length, absent = absentList.length, target = total - absent;
+            
+            let presentCount = 0, lateCount = 0, recordedAbsentCount = 0;
+            let missingStudents = [];
+            let lateStudents = [];
+            let lateAbsentStudents = []; // [버그수정4] 늦게 입력했지만 불참 처리된 학생 명단
+
+            for (const [id, status] of Object.entries(attendanceLog)) {
+                if (status === "정상") presentCount++; 
+                if (status === "점호지각") { lateCount++; lateStudents.push(`${id} ${studentsInfo[id].name}(${studentsInfo[id].room}호)`); }
+                if (status === "점호불참") { recordedAbsentCount++; lateAbsentStudents.push(`${id} ${studentsInfo[id].name}(${studentsInfo[id].room}호) [지각입력]`); }
+            }
+            
+            for (const [id, info] of Object.entries(studentsInfo)) {
+                if (!absentList.includes(id) && !attendanceLog[id]) missingStudents.push(`${id} ${info.name}(${info.room}호)`);
+            }
+            const totalAbsentCount = recordedAbsentCount + missingStudents.length;
+
+            let resultHtml = `
+                <div style="background:#f8f9fa; padding:12px; border-radius:10px; margin-bottom:15px; text-align:center;">
+                    <b>총원:</b> ${total}명 / <b>부재:</b> ${absent}명 / <b>대상:</b> ${target}명
+                </div>
+                <strong style="color:#27ae60;">✅ 정상 출석: ${presentCount}명</strong><br>
+                <strong style="color:#f39c12;">⚠️ 점호 지각: ${lateCount}명</strong><br>
+                <strong style="color:#e74c3c;">🚨 점호 불참: ${totalAbsentCount}명</strong><br><br>
+            `;
+            
+            if (lateStudents.length > 0) resultHtml += `<strong style="color:#f39c12;">[ 지각자 명단 ]</strong><br>${lateStudents.join("<br>")}<br><br>`;
+            // [버그수정4] 점호불참(지각입력)과 미입력(완전불참)을 함께 표시
+            const allAbsentList = [...lateAbsentStudents, ...missingStudents];
+            if (allAbsentList.length > 0) resultHtml += `<strong style="color:#c0392b;">[ 불참자 명단 ]</strong><br>${allAbsentList.join("<br>")}`;
+
+            document.getElementById('modalTitle').innerText = `점호 종료 결과 (${currentDateStr})`;
+            document.getElementById('modalBody').innerHTML = resultHtml;
+            document.getElementById('resultModal').style.display = 'flex';
+
+            const backupData = {
+                date: currentDateStr, total: total, target: target, absent: absent, present: presentCount, 
+                late: lateCount, missing: totalAbsentCount, 
+                lateList: lateStudents, 
+                missingList: [...lateAbsentStudents, ...missingStudents], // [버그수정4] 통합 명단
+                log: attendanceLog
+            };
+            try {
+                localStorage.setItem(`rollcall_history_${currentDateStr}`, JSON.stringify(backupData));
+            } catch(err) {
+                // [버그수정5] localStorage 용량 초과 처리
+                alert("저장 공간이 부족합니다. '기록/백업 관리' 메뉴에서 엑셀 백업 후 오래된 기록을 정리해주세요.");
+            }
+        }
+
+        function closeModal() { document.getElementById('resultModal').style.display = 'none'; }
+    </script>
+</body>
+</html>

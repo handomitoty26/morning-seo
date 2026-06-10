@@ -1,5 +1,5 @@
 // sw.js - 서현관아침점호v1 Service Worker
-const CACHE_NAME = 'seohyeon-morning-v1';
+const CACHE_NAME = 'seohyeon-morning-v2';
 const ASSETS = [
   './index.html',
   './manifest.json',

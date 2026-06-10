@@ -51,8 +51,9 @@
             box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); letter-spacing: 5px; margin-bottom: 8px;
         }
         .status-box {
-            background: #ffffff; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: bold;
+            background: #ffffff; padding: 10px 12px; border-radius: 10px; font-size: 17px; font-weight: bold;
             color: #7f8c8d; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px dashed #bdc3c7;
+            min-height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .status-box.active { background: #e8f5e9; border: 1px solid #27ae60; color: #27ae60; }
 
@@ -107,6 +108,15 @@
         .toast-success { background: rgba(39, 174, 96, 0.95); }
         .toast-warning { background: rgba(243, 156, 18, 0.95); }
         .toast-danger { background: rgba(192, 57, 43, 0.95); }
+
+        /* [v1.2] 동기화 텍스트 입력칸 (복사·붙여넣기 허용) */
+        .sync-textarea {
+            width: 100%; height: 90px; padding: 10px; border-radius: 10px;
+            border: 1px solid #bdc3c7; font-size: 13px; font-family: monospace;
+            resize: none; box-sizing: border-box; background: #fdfdfd; color: #2c3e50;
+            -webkit-user-select: text; user-select: text; touch-action: auto;
+            -webkit-touch-callout: default;
+        }
     </style>
 
     <script>
@@ -135,9 +145,10 @@
             <button class="menu-btn" onclick="openTimeSettings()">⏰ 기준 시간 설정</button>
             <button class="menu-btn" style="background:#2980b9; color:white;" onclick="showResults()">📊 당일 점호 종료</button>
             
-            <button class="menu-btn" style="background:#fef9e7; color:#d35400;" onclick="exportSyncData()">📤 동기화(내보내기)</button>
-            <button class="menu-btn" style="background:#fef9e7; color:#d35400;" onclick="document.getElementById('importSyncFile').click()">📥 동기화(가져오기)</button>
+            <button class="menu-btn" style="background:#fef9e7; color:#d35400;" onclick="openSyncExport()">📤 동기화(내보내기)</button>
+            <button class="menu-btn" style="background:#fef9e7; color:#d35400;" onclick="openSyncImport()">📥 동기화(가져오기)</button>
             <button class="menu-btn" style="background:#f4ecf7; color:#8e44ad;" onclick="openHistoryMenu()">🗂️ 기록/백업 관리</button>
+            <button class="menu-btn" id="fsBtn" style="grid-column:1 / -1; background:#34495e; color:white;" onclick="toggleFullscreen()">⛶ 전체화면 켜기 / 끄기</button>
         </div>
 
         <div class="display-area">
@@ -168,6 +179,49 @@
             <button class="close-btn" onclick="closeModal()">닫기</button>
         </div>
     </div>
+
+    <!-- [v1.2] 동기화 내보내기 모달 (보조 기기에서 실행) -->
+    <div class="modal" id="syncExportModal">
+        <div class="modal-content">
+            <h2>📤 동기화 내보내기</h2>
+            <div class="scrollable-content">
+                <div id="syncExportInfo" style="background:#f8f9fa; padding:12px; border-radius:10px; margin-bottom:14px; text-align:center; color:#2c3e50;"></div>
+
+                <div style="font-weight:900; color:#27ae60; margin-bottom:6px;">✅ 방법 1. 퀵쉐어로 텍스트 보내기 (가장 확실)</div>
+                <button class="save-btn" style="background:#27ae60;" onclick="shareSyncText()">📤 퀵쉐어로 텍스트 보내기</button>
+                <div style="font-size:12px; color:#7f8c8d; margin-bottom:16px; line-height:1.6;">받는 기기 화면에 내용이 뜨면 <b>[복사]</b>를 누르고 → 메인 기기에서 <b>[가져오기 → 붙여넣기]</b> 하세요.</div>
+
+                <div style="font-weight:900; color:#d35400; margin-bottom:6px;">방법 2. 퀵쉐어로 파일 보내기 (되면 가장 편함)</div>
+                <button class="save-btn" style="background:#d35400;" onclick="shareSyncFile()">📤 퀵쉐어로 파일 보내기</button>
+                <div style="font-size:12px; color:#7f8c8d; margin-bottom:16px; line-height:1.6;">받는 기기 <b>다운로드 폴더</b>에 파일이 저장되면 → 메인 기기에서 <b>[가져오기 → 파일 선택]</b>으로 불러오세요.</div>
+
+                <div style="font-size:12px; color:#95a5a6; margin-bottom:6px; line-height:1.5;">⚙️ PC에서 쓰거나 공유 버튼이 안 뜰 때만: 아래 칸을 길게 눌러 [전체 선택 → 복사]</div>
+                <button class="save-btn" style="background:#95a5a6;" onclick="copySyncText()">📋 텍스트 복사 (같은 기기 안에서)</button>
+                <div id="syncCopyStatus" style="font-size:13px; font-weight:bold; margin-bottom:8px; line-height:1.5; min-height:18px;"></div>
+                <textarea id="syncExportText" class="sync-textarea" readonly></textarea>
+            </div>
+            <button class="close-btn" onclick="closeSyncExport()">닫기</button>
+        </div>
+    </div>
+
+    <!-- [v1.2] 동기화 가져오기 모달 (메인 기기에서 실행) -->
+    <div class="modal" id="syncImportModal">
+        <div class="modal-content">
+            <h2>📥 동기화 가져오기</h2>
+            <div class="scrollable-content">
+                <div style="font-weight:900; color:#27ae60; margin-bottom:6px;">✅ 방법 1. 붙여넣어서 가져오기 (가장 확실)</div>
+                <div style="font-size:12px; color:#7f8c8d; margin-bottom:6px; line-height:1.6;">퀵쉐어로 받은 내용이 화면에 뜨면 <b>[복사]</b>를 누른 뒤, 아래 칸을 길게 눌러 <b>[붙여넣기]</b> 하세요.</div>
+                <textarea id="syncImportText" class="sync-textarea" placeholder="여기에 받은 동기화 내용을 붙여넣으세요"></textarea>
+                <button class="save-btn" style="background:#27ae60; margin-top:8px; margin-bottom:16px;" onclick="mergePastedSync()">✅ 붙여넣은 내용 병합</button>
+
+                <div style="font-weight:900; color:#2980b9; margin-bottom:6px;">방법 2. 파일에서 가져오기</div>
+                <button class="save-btn" style="background:#2980b9;" onclick="document.getElementById('importSyncFile').click()">📁 동기화 파일 선택</button>
+                <div style="font-size:12px; color:#7f8c8d; line-height:1.6;">퀵쉐어로 받은 파일(<b>다운로드 폴더</b>의 점호동기화_*.json)을 선택하세요.</div>
+            </div>
+            <button class="close-btn" onclick="closeSyncImport()">닫기</button>
+        </div>
+    </div>
+
 
     <script>
         let studentsInfo = {};
@@ -225,12 +279,94 @@
             });
         });
 
+        // ==========================================
+        // [v1.3] 데이터 보호: 자동 저장/복원 + 뒤로가기 가드 + 전체화면
+        // ==========================================
+        const LIVE_KEY = 'rollcall_live';
+
+        // 현재 작업 상태(명단+부재자+출석기록)를 매 변경마다 자동 저장
+        function saveLiveSession() {
+            try {
+                localStorage.setItem(LIVE_KEY, JSON.stringify({
+                    date: currentDateStr,
+                    studentsInfo: studentsInfo,
+                    absentList: absentList,
+                    attendanceLog: attendanceLog,
+                    savedAt: Date.now()
+                }));
+            } catch (e) { /* 용량 초과 등은 무시 (종료 시 별도 안내) */ }
+        }
+
+        // 앱 재시작 시 최근(12시간 이내) 점호 기록을 자동 복원
+        function restoreLiveSession() {
+            try {
+                const raw = localStorage.getItem(LIVE_KEY);
+                if (!raw) return false;
+                const s = JSON.parse(raw);
+                if (!s || !s.studentsInfo || Object.keys(s.studentsInfo).length === 0) return false;
+                // 같은 점호 세션(12시간 이내)만 복원 — 다음날 등 오래된 기록은 무시
+                if (!s.savedAt || (Date.now() - s.savedAt) > 12 * 60 * 60 * 1000) return false;
+                studentsInfo = s.studentsInfo || {};
+                absentList = s.absentList || [];
+                attendanceLog = s.attendanceLog || {};
+                if (s.date) currentDateStr = s.date;
+                const total = Object.keys(studentsInfo).length;
+                const done = Object.keys(attendanceLog).length;
+                statusEl.innerHTML = `📅 [${currentDateStr}] 이전 기록 복원됨<br><span style="color:#2c3e50;">총원 ${total}명 / 점호완료 ${done}명 — 이어서 진행하세요</span>`;
+                statusEl.classList.add('active');
+                showToast(`이전 점호 ${done}명 복원!`, 'toast-success');
+                return true;
+            } catch (e) { return false; }
+        }
+
+        // 열려있는 모달 찾기 (뒤로가기 가드용)
+        function findOpenModal() {
+            const modals = document.querySelectorAll('.modal');
+            for (const m of modals) { if (m.style.display === 'flex') return m; }
+            return null;
+        }
+
+        // 뒤로가기(시스템 백버튼) 실수 종료 방지
+        function setupExitGuard() {
+            try {
+                history.pushState({ rc: 1 }, '');
+                window.addEventListener('popstate', function () {
+                    const m = findOpenModal();
+                    if (m) { m.style.display = 'none'; history.pushState({ rc: 1 }, ''); return; }
+                    const ok = confirm('점호 화면을 나가시겠습니까?\n\n입력한 기록은 자동 저장되어, 다시 열면 그대로 복원됩니다.');
+                    if (ok) { history.back(); }
+                    else { history.pushState({ rc: 1 }, ''); }
+                });
+            } catch (e) {}
+        }
+
+        // 전체화면 켜기/끄기 (시스템 바·뒤로가기 버튼 숨김)
+        function toggleFullscreen() {
+            try {
+                const el = document.documentElement;
+                const isFs = document.fullscreenElement || document.webkitFullscreenElement;
+                if (!isFs) {
+                    const rq = el.requestFullscreen || el.webkitRequestFullscreen;
+                    if (rq) rq.call(el);
+                } else {
+                    const ex = document.exitFullscreen || document.webkitExitFullscreen;
+                    if (ex) ex.call(document);
+                }
+            } catch (e) {}
+        }
+        document.addEventListener('fullscreenchange', function () {
+            const b = document.getElementById('fsBtn');
+            if (b) b.textContent = document.fullscreenElement ? '🗗 전체화면 끄기' : '⛶ 전체화면 켜기 / 끄기';
+        });
+
         window.onload = function() {
             const savedTime = localStorage.getItem('rollcall_timeSettings');
             if (savedTime) {
                 const ts = JSON.parse(savedTime);
                 LATE_HOUR = ts.lateH; LATE_MIN = ts.lateM; END_HOUR = ts.endH; END_MIN = ts.endM;
             }
+            restoreLiveSession();   // [v1.3] 이전 점호 기록 자동 복원
+            setupExitGuard();       // [v1.3] 뒤로가기 실수 종료 방지
         };
 
         function unlockAudio() {
@@ -286,6 +422,13 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
+                    // [v1.3] 기존 점호 기록이 있으면 초기화 전 확인 (실수 방지)
+                    if (Object.keys(attendanceLog).length > 0) {
+                        if (!confirm(`현재 점호 기록 ${Object.keys(attendanceLog).length}명이 있습니다.\n새 명단을 불러오면 이 기록이 초기화됩니다.\n계속하시겠습니까?`)) {
+                            document.getElementById('excelFile').value = '';
+                            return;
+                        }
+                    }
                     const data = new Uint8Array(e.target.result); const workbook = XLSX.read(data, {type: 'array'});
                     studentsInfo = {}; absentList = []; attendanceLog = {};
                     
@@ -336,6 +479,7 @@
                     statusEl.innerHTML = `📅 [${currentDateStr}] 로드 완료<br><span style="color:#2c3e50;">총원 ${total}명 / 부재 ${absentCount}명 / 점호대상 ${targetCount}명</span>`;
                     statusEl.classList.add('active');
                     speak("데이터 연결이 완료되었습니다. 점호를 시작합니다.");
+                    saveLiveSession();   // [v1.3] 명단 로드 직후 기준 상태 저장
                 } catch (error) { alert("엑셀 데이터를 읽지 못했습니다. 파일 구조를 확인해주세요."); }
                 document.getElementById('excelFile').value = '';
             };
@@ -343,56 +487,120 @@
         });
 
         // ==========================================
-        // 2. 동기화 (내보내기 / 가져오기) - 원터치 퀵쉐어 (.txt)
+        // 2. 동기화 (내보내기 / 가져오기) - 이중 경로 (파일 + 텍스트)
+        // [v1.2 전면개편] 퀵쉐어가 '파일 저장' / '텍스트 표시' 중 무엇으로 동작하든
+        // 반드시 동기화되도록 두 가지 경로를 모두 제공:
+        //   ① 파일 공유(퀵쉐어) → 받는 기기에서 [파일 선택]으로 가져오기
+        //   ② 텍스트 복사 → 받는 기기에서 [붙여넣기]로 가져오기
         // ==========================================
-        async function exportSyncData() {
-            if(Object.keys(attendanceLog).length === 0) { alert("동기화할 출석 기록이 없습니다."); return; }
-            
-            try {
-                const dataStr = JSON.stringify(attendanceLog);
-                
-                // 안드로이드가 공유창을 띄우기 가장 좋아하는 포맷인 .txt로 강제 변환
-                const fileName = `점호동기화_${currentDateStr}.txt`;
-                const blob = new Blob([dataStr], { type: 'text/plain' });
-                
-                // File 객체 생성 (안드로이드 공유 시트 호환성)
-                let file = null;
-                try { 
-                    file = new File([blob], fileName, { type: 'text/plain' }); 
-                } catch (e) { 
-                    file = null; 
-                }
 
-                // [v1.5] 1순위: navigator.share (퀵쉐어 / 카톡 / 메신저 시트)
-                // 안드로이드는 canShare({files})가 false라도 share() 자체는 가능하므로
-                // 두 단계로 시도: (a) 파일 공유, (b) 파일 공유 불가 시 텍스트 공유
+        // 내보내기 모달 열기 (메뉴 버튼이 호출)
+        function openSyncExport() {
+            if (Object.keys(attendanceLog).length === 0) { alert("동기화할 출석 기록이 없습니다."); return; }
+            const dataStr = JSON.stringify(attendanceLog);
+            const count = Object.keys(attendanceLog).length;
+            const infoEl = document.getElementById('syncExportInfo');
+            if (infoEl) infoEl.innerHTML = `보조 기기에서 입력한 <b>${count}명</b>의 점호 기록을 메인 기기로 보냅니다.`;
+            const ta = document.getElementById('syncExportText');
+            if (ta) ta.value = dataStr;
+            document.getElementById('syncCopyStatus').innerHTML = '';
+            document.getElementById('syncExportModal').style.display = 'flex';
+        }
+        function closeSyncExport() { document.getElementById('syncExportModal').style.display = 'none'; }
+
+        // [경로 ①] 퀵쉐어로 텍스트 전송 (가장 확실 - 받는 기기에서 복사 후 붙여넣기)
+        // 받는 기기에 텍스트가 도착하면 화면에 [복사/공유] 버튼이 뜨고,
+        // [복사]를 누른 뒤 메인 기기 [가져오기 > 붙여넣기]로 병합한다.
+        async function shareSyncText() {
+            const text = document.getElementById('syncExportText').value;
+            if (!text) { alert("동기화할 데이터가 없습니다."); return; }
+            if (navigator.share) {
+                try {
+                    await navigator.share({ text: text });
+                    return; // 퀵쉐어 전송 완료
+                } catch (err) {
+                    if (err.name === 'AbortError') return; // 사용자가 취소
+                    console.warn('텍스트 공유 실패, 복사로 폴백:', err.name, err.message);
+                }
+            }
+            // 공유 미지원(주로 PC) → 클립보드 복사로 폴백
+            copySyncText();
+        }
+
+        // [경로 ②] 파일로 공유 (퀵쉐어)
+        async function shareSyncFile() {
+            try {
+                const dataStr = document.getElementById('syncExportText').value;
+                const fileName = `점호동기화_${currentDateStr}.json`;
+                const SYNC_MIME = 'application/octet-stream'; // 텍스트로 오인되지 않도록 일반 파일 형식
+                const blob = new Blob([dataStr], { type: SYNC_MIME });
+
+                let file = null;
+                try { file = new File([blob], fileName, { type: SYNC_MIME }); } catch (e) { file = null; }
+
                 if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
                     try {
-                        await navigator.share({ 
-                            title: '기숙사 점호 동기화', 
-                            text: `점호동기화_${currentDateStr}`,
-                            files: [file] 
-                        });
-                        return; // 공유 성공 (퀵쉐어/메신저 전송 완료)
+                        await navigator.share({ files: [file] });
+                        return; // 공유 시트 전송 완료
                     } catch (err) {
-                        if (err.name === 'AbortError') return; // 사용자가 공유 시트 취소
-                        // NotAllowedError, DataError 등은 다음 단계로 폴백
+                        if (err.name === 'AbortError') return; // 사용자가 취소
                         console.warn('파일 공유 실패, 폴백 시도:', err.name, err.message);
                     }
                 }
-                
-                // [v1.5] 2순위: showSaveFilePicker로 사용자가 저장 위치 직접 선택 (퀵쉐어 폴더 등)
-                const result = await saveFileWithPicker(blob, fileName, 'txt');
+
+                // 공유 불가 환경(주로 PC) → 저장 위치 선택 또는 다운로드 폴더
+                const result = await saveFileWithPicker(blob, fileName, 'sync');
                 if (result.aborted) return;
                 if (!result.success) { alert("저장 실패: " + (result.error || "알 수 없는 오류")); return; }
-                
                 if (result.picker) {
-                    alert(`동기화 파일이 선택한 경로에 저장되었습니다.\n파일명: ${result.savedName || fileName}\n\n파일 앱에서 파일을 길게 눌러 퀵쉐어로 메인 기기에 전송하거나, 메인 기기에서 [동기화 파일 가져오기]로 불러오세요.`);
+                    alert(`동기화 파일이 선택한 경로에 저장되었습니다.\n파일명: ${result.savedName || fileName}\n\n메인 기기에서 [동기화(가져오기) > 파일 선택]으로 불러오세요.`);
                 } else {
-                    alert(`동기화 파일이 다운로드 폴더에 저장되었습니다.\n파일명: ${fileName}\n\n파일 앱에서 파일을 길게 눌러 퀵쉐어로 메인 기기에 전송하세요.`);
+                    alert(`동기화 파일이 다운로드 폴더에 저장되었습니다.\n파일명: ${fileName}\n\n파일 앱에서 파일을 길게 눌러 퀵쉐어로 메인 기기에 전송한 뒤, [동기화(가져오기) > 파일 선택]으로 불러오세요.`);
                 }
             } catch (err) { alert("내보내기 중 오류가 발생했습니다: " + err.message); }
         }
+
+        // [경로 ②] 텍스트 클립보드 복사 (클립보드 API 실패 시 textarea 선택 폴백)
+        async function copySyncText() {
+            const ta = document.getElementById('syncExportText');
+            const statusEl = document.getElementById('syncCopyStatus');
+            const text = ta ? ta.value : '';
+            if (!text) { alert("복사할 데이터가 없습니다."); return; }
+            let ok = false;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    ok = true;
+                }
+            } catch (e) { ok = false; }
+            if (!ok) {
+                // 폴백: textarea 전체 선택 후 execCommand
+                try {
+                    ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+                    ok = document.execCommand('copy');
+                } catch (e) { ok = false; }
+            }
+            if (ok) {
+                statusEl.innerHTML = '✅ 복사됨! (같은 기기 안에서만 유효 — 기기 간 전송은 위의 퀵쉐어 버튼을 쓰세요)';
+                statusEl.style.color = '#27ae60';
+            } else {
+                statusEl.innerHTML = '⚠️ 자동 복사 실패. 아래 칸을 길게 눌러 [전체 선택 → 복사] 해주세요.';
+                statusEl.style.color = '#e67e22';
+                try { ta.focus(); ta.select(); } catch (e) {}
+            }
+        }
+
+        // 가져오기 모달 열기 (메뉴 버튼이 호출)
+        function openSyncImport() {
+            if (Object.keys(studentsInfo).length === 0) {
+                alert("먼저 당일 엑셀 명단을 등록한 후 동기화 데이터를 가져오세요.");
+                return;
+            }
+            const ta = document.getElementById('syncImportText');
+            if (ta) ta.value = '';
+            document.getElementById('syncImportModal').style.display = 'flex';
+        }
+        function closeSyncImport() { document.getElementById('syncImportModal').style.display = 'none'; }
 
         // [v1.4 신규] 사용자가 저장 위치와 파일명을 직접 선택 가능한 저장 함수
         // showSaveFilePicker API를 우선 시도, 미지원 시 다운로드 폴더로 폴백
@@ -410,19 +618,27 @@
 
         async function saveFileWithPicker(blob, fileName, fileKind) {
             if (!blob || blob.size === 0) { alert("내부 오류: 저장할 데이터가 비어 있습니다. (0 bytes)"); return { success: false, aborted: true }; }
-            // fileKind: 'xlsx' | 'txt'
+            // fileKind: 'xlsx' | 'txt' | 'sync'
             if (!isMobileDevice() && window.showSaveFilePicker) {
                 try {
-                    const pickerOptions = {
-                        suggestedName: fileName,
-                        types: fileKind === 'xlsx' ? [{
+                    let typeOptions;
+                    if (fileKind === 'xlsx') {
+                        typeOptions = [{
                             description: 'Excel 파일',
                             accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
-                        }] : [{
+                        }];
+                    } else if (fileKind === 'sync') {
+                        typeOptions = [{
+                            description: '동기화 파일',
+                            accept: { 'application/json': ['.json'] }
+                        }];
+                    } else {
+                        typeOptions = [{
                             description: '텍스트 파일',
                             accept: { 'text/plain': ['.txt'] }
-                        }]
-                    };
+                        }];
+                    }
+                    const pickerOptions = { suggestedName: fileName, types: typeOptions };
                     const handle = await window.showSaveFilePicker(pickerOptions);
                     const writable = await handle.createWritable();
                     await writable.write(blob);
@@ -461,73 +677,108 @@
             } catch(e) { alert("파일 저장에 실패했습니다."); }
         }
 
+        // [v1.2 신규] 동기화 병합 핵심 로직 (파일 가져오기 / 텍스트 붙여넣기 공용)
+        // rawText: 동기화 JSON 문자열. 성공 시 true 반환.
+        function mergeSyncData(rawText) {
+            // 명단이 등록되지 않은 상태에서 가져오기 차단
+            if (Object.keys(studentsInfo).length === 0) {
+                alert("먼저 당일 엑셀 명단을 등록한 후 동기화 데이터를 가져오세요.");
+                return false;
+            }
+            if (!rawText || !String(rawText).trim()) {
+                alert("가져올 내용이 비어 있습니다.");
+                return false;
+            }
+
+            let parsed;
+            try {
+                // [v1.2] 받은 텍스트에 공백/줄바꿈/따옴표 등이 섞여 있어도
+                // 가장 바깥쪽 { ... } 구간만 잘라내어 견고하게 파싱
+                let text = String(rawText).trim();
+                const first = text.indexOf('{');
+                const last = text.lastIndexOf('}');
+                if (first !== -1 && last !== -1 && last > first) {
+                    text = text.substring(first, last + 1);
+                }
+                parsed = JSON.parse(text);
+            } catch (err) {
+                alert("올바른 동기화 데이터가 아닙니다.\n(" + err.message + ")\n\n받은 내용 전체를 빠짐없이 붙여넣었는지 확인해주세요.");
+                return false;
+            }
+
+            // JSON 파싱 결과가 평범한 객체인지 검증 (배열·null·숫자 거부)
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                alert("올바른 동기화 데이터가 아닙니다. (형식 오류)");
+                return false;
+            }
+
+            // 사전부재자/미등록 학번을 걸러내며 병합
+            const filteredLog = {};
+            let invalidIdCount = 0;
+            let absentBlockedCount = 0;
+            let conflictCount = 0;
+            let conflictList = [];
+
+            for (const [id, status] of Object.entries(parsed)) {
+                if (status !== '정상' && status !== '점호지각' && status !== '점호불참') continue;
+                if (!studentsInfo[id]) { invalidIdCount++; continue; }
+                if (absentList.includes(id)) { absentBlockedCount++; continue; }
+                if (attendanceLog[id] && attendanceLog[id] !== status) {
+                    conflictCount++;
+                    conflictList.push(`${id} ${studentsInfo[id].name}: ${attendanceLog[id]} → ${status}`);
+                }
+                filteredLog[id] = status;
+            }
+
+            const mergedCount = Object.keys(filteredLog).length;
+
+            // 유효한 데이터가 전혀 없으면 사용자에게 알림 (잘못 붙여넣은 경우 방지)
+            if (mergedCount === 0 && invalidIdCount === 0 && absentBlockedCount === 0) {
+                alert("가져올 출석 데이터가 없습니다.\n동기화 내용이 맞는지 다시 확인해주세요.");
+                return false;
+            }
+
+            attendanceLog = { ...attendanceLog, ...filteredLog };
+            saveLiveSession();   // [v1.3] 동기화 병합 결과도 자동 저장
+
+            let msg = `보조 기기 데이터 병합 완료\n\n✓ 병합: ${mergedCount}명`;
+            if (conflictCount > 0) {
+                msg += `\n⚠ 충돌(덮어씀): ${conflictCount}명`;
+                if (conflictList.length <= 5) {
+                    msg += `\n   ${conflictList.join('\n   ')}`;
+                } else {
+                    msg += `\n   ${conflictList.slice(0, 5).join('\n   ')}\n   ... 외 ${conflictList.length - 5}명`;
+                }
+            }
+            if (invalidIdCount > 0) msg += `\n✗ 미등록 학번: ${invalidIdCount}건 무시`;
+            if (absentBlockedCount > 0) msg += `\n✗ 사전부재자: ${absentBlockedCount}건 무시`;
+            alert(msg);
+            return true;
+        }
+
+        // 파일에서 가져오기
         document.getElementById('importSyncFile').addEventListener('change', function(e) {
             const file = e.target.files[0]; if (!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
-                try {
-                    // 명단이 등록되지 않은 상태에서 가져오기 차단
-                    if(Object.keys(studentsInfo).length === 0) {
-                        alert("먼저 당일 엑셀 명단을 등록한 후 동기화 파일을 가져오세요.");
-                        document.getElementById('importSyncFile').value = '';
-                        return;
-                    }
-                    
-                    // [v1.5 버그수정] JSON 파싱 결과가 평범한 객체인지 검증
-                    // (배열, null, 숫자 등은 거부 → Object.entries에서 의미 없는 값 또는 오류 방지)
-                    const parsed = JSON.parse(e.target.result);
-                    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-                        alert("올바른 동기화 파일이 아닙니다. (형식 오류)");
-                        document.getElementById('importSyncFile').value = '';
-                        return;
-                    }
-                    
-                    // [v1.5 버그수정] 사전부재자가 동기화 파일에 포함되어 있어도 무시
-                    // (보조 태블릿에서 부재자 데이터가 잘못 섞이는 경우 이중 집계 방지)
-                    const filteredLog = {};
-                    let invalidIdCount = 0;
-                    let absentBlockedCount = 0;
-                    let conflictCount = 0;
-                    let conflictList = [];
-                    
-                    for (const [id, status] of Object.entries(parsed)) {
-                        // 유효한 상태값이 아니면 무시
-                        if (status !== '정상' && status !== '점호지각' && status !== '점호불참') continue;
-                        // 명단에 없는 학번 무시
-                        if (!studentsInfo[id]) { invalidIdCount++; continue; }
-                        // 사전부재자는 무시 (이중 집계 방지)
-                        if (absentList.includes(id)) { absentBlockedCount++; continue; }
-                        // 양쪽에서 입력된 학생 추적
-                        if (attendanceLog[id] && attendanceLog[id] !== status) {
-                            conflictCount++;
-                            conflictList.push(`${id} ${studentsInfo[id].name}: ${attendanceLog[id]} → ${status}`);
-                        }
-                        filteredLog[id] = status;
-                    }
-                    
-                    attendanceLog = { ...attendanceLog, ...filteredLog };
-                    const mergedCount = Object.keys(filteredLog).length;
-                    
-                    // 결과 메시지 (운영자가 충돌/필터 상황을 정확히 파악할 수 있도록)
-                    let msg = `보조 기기 데이터 병합 완료\n\n✓ 병합: ${mergedCount}명`;
-                    if (conflictCount > 0) {
-                        msg += `\n⚠ 충돌(덮어씀): ${conflictCount}명`;
-                        if (conflictList.length <= 5) {
-                            msg += `\n   ${conflictList.join('\n   ')}`;
-                        } else {
-                            msg += `\n   ${conflictList.slice(0, 5).join('\n   ')}\n   ... 외 ${conflictList.length - 5}명`;
-                        }
-                    }
-                    if (invalidIdCount > 0) msg += `\n✗ 미등록 학번: ${invalidIdCount}건 무시`;
-                    if (absentBlockedCount > 0) msg += `\n✗ 사전부재자: ${absentBlockedCount}건 무시`;
-                    alert(msg);
-                } catch(err) { alert("올바른 동기화 파일이 아닙니다.\n(" + err.message + ")"); }
+                const ok = mergeSyncData(e.target.result);
+                if (ok) closeSyncImport();
+                document.getElementById('importSyncFile').value = '';
+            };
+            reader.onerror = function() {
+                alert("파일을 읽지 못했습니다. 다시 시도해주세요.");
                 document.getElementById('importSyncFile').value = '';
             };
             reader.readAsText(file);
         });
 
-        // ==========================================
+        // [v1.2 신규] 붙여넣은 텍스트로 가져오기
+        function mergePastedSync() {
+            const ta = document.getElementById('syncImportText');
+            const ok = mergeSyncData(ta ? ta.value : '');
+            if (ok) { if (ta) ta.value = ''; closeSyncImport(); }
+        }
+
         // 3. 📅 달력 UI 생성 및 제어 로직
         // ==========================================
         function buildCalendarHTML() {
@@ -881,13 +1132,14 @@
                 showToast("오류!!", "toast-danger"); speak("등록되지 않은 학번입니다."); return;
             }
             const name = studentsInfo[studentId].name;
+            const room = studentsInfo[studentId].room;
             if(absentList.includes(studentId)) {
-                statusEl.innerHTML = `<span style="color:#e67e22">[${studentId}] ${name} 학생은 부재 처리되었습니다.</span>`; 
-                showToast("부재자!!", "toast-warning"); speak("사전에 부재 처리 되었습니다."); return;
+                statusEl.innerHTML = bigResultHtml(name, "사전 부재", "#e67e22");
+                showToast(`${name} 사전 부재`, "toast-warning"); speak("사전에 부재 처리 되었습니다."); return;
             }
             if(attendanceLog[studentId]) {
-                statusEl.innerHTML = `<span style="color:#8e44ad">[${studentId}] ${name} 학생은 이미 점호되었습니다.</span>`; 
-                showToast("중복!!", "toast-warning"); speak("이미 점호를 완료했습니다."); return;
+                statusEl.innerHTML = bigResultHtml(name, "이미 점호함", "#8e44ad");
+                showToast(`${name} 이미 점호함`, "toast-warning"); speak("이미 점호를 완료했습니다."); return;
             }
 
             const now = new Date();
@@ -898,20 +1150,29 @@
             let status = "", msg = "";
             
             if (totalMins >= endLimit) { 
-                status = "점호불참"; msg = `<span style="color:#c0392b">${studentId} ${name} 점호불참</span>`; 
-                showToast("불참 처리!!", "toast-danger"); speak(`${name} 불참 처리되었습니다.`); 
+                status = "점호불참"; msg = bigResultHtml(name, "점호 불참", "#c0392b"); 
+                showToast(`${name} 점호 불참`, "toast-danger"); speak(`${name} 불참 처리되었습니다.`); 
             }
             else if (totalMins >= lateLimit) { 
-                status = "점호지각"; msg = `<span style="color:#f39c12">${studentId} ${name} 지각 완료</span>`; 
-                showToast("지각 완료!!", "toast-warning"); speak(`${name} 지각 출석 완료`); 
+                status = "점호지각"; msg = bigResultHtml(name, "지각 완료", "#f39c12"); 
+                showToast(`${name} 지각 완료`, "toast-warning"); speak(`${name} 지각 출석 완료`); 
             } 
             else { 
-                status = "정상"; msg = `<span style="color:#27ae60">${studentId} ${name} 정상 출석</span>`; 
-                showToast("출석 완료!!", "toast-success"); speak(`${name} 출석 완료`); 
+                status = "정상"; msg = bigResultHtml(name, "점호 완료", "#27ae60"); 
+                showToast(`${name} 점호 완료`, "toast-success"); speak(`${name} 출석 완료`); 
             }
 
             attendanceLog[studentId] = status;
             statusEl.innerHTML = msg;
+            saveLiveSession();   // [v1.3] 매 입력마다 자동 저장
+        }
+
+        // [v1.4] 중앙 표시: 이름 + 상태를 가로 한 줄로 크게 (화면 폭을 채워 시인성 ↑)
+        function bigResultHtml(name, statusText, color) {
+            return `<div style="display:flex; align-items:baseline; justify-content:center; gap:0.4em; flex-wrap:wrap; width:100%; line-height:1.15;">`
+                 + `<span style="font-size:clamp(34px,8.5vw,64px); font-weight:900; color:#2c3e50;">${name}</span>`
+                 + `<span style="font-size:clamp(30px,7.5vw,56px); font-weight:900; color:${color};">${statusText}</span>`
+                 + `</div>`;
         }
 
         // ==========================================
@@ -937,6 +1198,22 @@
             }
             const totalAbsentCount = recordedAbsentCount + missingStudents.length;
 
+            // [v1.4] 불참자 명단 - 호실순 정렬 (공유용)
+            const allAbsentRaw = [
+                ...lateAbsentStudents.map(s => ({ text: s, room: parseInt(studentsInfo[Object.keys(attendanceLog).find(id => attendanceLog[id]==='점호불참' && s.startsWith(id))]?.room||'9999')||9999, tag:'[지각입력]' })),
+                ...missingStudents.map(s => { const id = s.split(' ')[0]; return { text: s, room: parseInt(studentsInfo[id]?.room||'9999')||9999, tag:'' }; })
+            ];
+            const allAbsentByRoom = [...allAbsentRaw].sort((a,b)=>a.room-b.room);
+
+            // 화면 표시: 학번순 (기존 그대로)
+            const allAbsentList = [...lateAbsentStudents, ...missingStudents];
+
+            // 호실순 공유 텍스트 생성 (전역 저장 → shareAbsent()에서 사용)
+            window._absentShareText = totalAbsentCount === 0 ? '' :
+                '[' + currentDateStr + ' 아침점호 불참자]\n총 ' + totalAbsentCount + '명\n\n' +
+                allAbsentByRoom.map(s => s.text).join('\n');
+
+
             let resultHtml = `
                 <div style="background:#f8f9fa; padding:12px; border-radius:10px; margin-bottom:15px; text-align:center;">
                     <b>총원:</b> ${total}명 / <b>부재:</b> ${absent}명 / <b>대상:</b> ${target}명
@@ -947,9 +1224,25 @@
             `;
             
             if (lateStudents.length > 0) resultHtml += `<strong style="color:#f39c12;">[ 지각자 명단 ]</strong><br>${lateStudents.join("<br>")}<br><br>`;
-            // [버그수정4] 점호불참(지각입력)과 미입력(완전불참)을 함께 표시
-            const allAbsentList = [...lateAbsentStudents, ...missingStudents];
-            if (allAbsentList.length > 0) resultHtml += `<strong style="color:#c0392b;">[ 불참자 명단 ]</strong><br>${allAbsentList.join("<br>")}`;
+            // [버그수정4] 점호불참(지각입력)과 미입력(완전불참)을 함께 표시 (학번순)
+            if (allAbsentList.length > 0) resultHtml += `<strong style="color:#c0392b;">[ 불참자 명단 ] (학번순)</strong><br>${allAbsentList.join("<br>")}<br><br>`;
+
+            // [v1.4] 불참자 호실순 명단 + 카카오톡 공유 버튼
+            if (totalAbsentCount > 0) {
+                resultHtml += `
+                <div style="border-top:2px solid #e74c3c; padding-top:12px; margin-top:4px;">
+                    <strong style="color:#c0392b;">[ 불참자 명단 ] (호실순 — 순찰용)</strong><br>
+                    <div style="margin:8px 0 12px 0; line-height:1.8;">
+                        ${allAbsentByRoom.map(s=>s.text).join('<br>')}
+                    </div>
+                    <button onclick="shareAbsent()" style="
+                        width:100%; padding:14px; font-size:17px; font-weight:900;
+                        background:#fee500; color:#3c1e1e; border:none; border-radius:12px;
+                        cursor:pointer; letter-spacing:0.5px;">
+                        💬 카카오톡으로 공유
+                    </button>
+                </div>`;
+            }
 
             document.getElementById('modalTitle').innerText = `점호 종료 결과 (${currentDateStr})`;
             document.getElementById('modalBody').innerHTML = resultHtml;
@@ -967,6 +1260,28 @@
             } catch(err) {
                 // [버그수정5] localStorage 용량 초과 처리
                 alert("저장 공간이 부족합니다. '기록/백업 관리' 메뉴에서 엑셀 백업 후 오래된 기록을 정리해주세요.");
+            }
+        }
+
+        // [v1.4] 불참자 명단(호실순) 텍스트를 카카오톡 등 앱으로 공유
+        async function shareAbsent() {
+            const text = window._absentShareText;
+            if (!text) { alert("공유할 불참자 명단이 없습니다."); return; }
+            // Android 갤럭시탭: navigator.share({text})로 시스템 공유 시트(카카오톡 선택 가능)
+            if (navigator.share) {
+                try {
+                    await navigator.share({ text: text });
+                    return;
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                }
+            }
+            // PC/공유 미지원 환경: 클립보드 복사로 폴백
+            try {
+                await navigator.clipboard.writeText(text);
+                alert("불참자 명단이 클립보드에 복사되었습니다. 카카오톡 대화방에 붙여넣기 하세요.");
+            } catch (e) {
+                prompt("아래 내용을 복사해서 카카오톡에 붙여넣으세요:", text);
             }
         }
 

@@ -232,7 +232,9 @@
         let audioInitialized = false; 
         
         let LATE_HOUR = 6, LATE_MIN = 45, END_HOUR = 7, END_MIN = 0;
-        let currentDateStr = new Date().toISOString().split('T')[0];
+        // 오늘 날짜(기기의 한국 시간) — toISOString은 UTC라 오전 9시 전에는 전날이 나왔다(2026-10-11)
+        function localDateStr() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+        let currentDateStr = localDateStr();
 
         // 📅 달력 전용 변수
         let calYear = new Date().getFullYear();
@@ -413,10 +415,10 @@
                     && testDate.getUTCDate() === parseInt(day)) {
                     currentDateStr = `${year}-${month}-${day}`;
                 } else {
-                    currentDateStr = new Date().toISOString().split('T')[0];
+                    currentDateStr = localDateStr();
                 }
             } else { 
-                currentDateStr = new Date().toISOString().split('T')[0]; 
+                currentDateStr = localDateStr(); 
             }
 
             const reader = new FileReader();

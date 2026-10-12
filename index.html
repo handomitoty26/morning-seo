@@ -1345,5 +1345,115 @@
 
 </script>
     <input type="file" id="rc-restore-file" accept=".json,application/json" style="display:none" onchange="doRollcallRestore(event)">
+<!-- dorm-install-banner:start -->
+<script>
+/* 기숙사 앱 설치 안내 띠 — 공통 조각(원본: ROSA scripts/dorm-pwa/install-banner.html, 고치려면 원본을 고쳐 적용기로 다시 넣는다).
+   안드로이드 크롬 메뉴 설치는 같은 도메인에 웹앱이 하나라도 있으면 "이미 설치됨"으로 막혀(2026-09 크롬 변경) 페이지 설치 요청(beforeinstallprompt)으로 설치한다.
+   설치 요청이 온 뒤에만 닫힌 Shadow DOM으로 띠를 만든다 — 그 전에는 화면을 건드리지 않고, 앱 CSS와 서로 섞이지 않는다. */
+(function () {
+  "use strict";
+  var KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+  var MODES = ["standalone", "fullscreen", "minimal-ui", "window-controls-overlay"];
+
+  function installedNow() {
+    try {
+      for (var i = 0; i < MODES.length; i++) {
+        if (window.matchMedia("(display-mode: " + MODES[i] + ")").matches) return true;
+      }
+    } catch (e) {}
+    if (window.navigator.standalone === true) return true;
+    return String(document.referrer || "").indexOf("android-app://") === 0;
+  }
+  function dismissKey() {
+    var p = String(location.pathname || "/").replace(/index\.html$/i, "").replace(/\/+$/, "");
+    return "dorm-install-banner:dismissed:" + (p || "/");
+  }
+  function dismissedRecently() {
+    try {
+      var v = Number(localStorage.getItem(dismissKey()));
+      var age = Date.now() - v;
+      return v > 0 && age >= 0 && age < KEEP_MS;
+    } catch (e) {
+      return false;
+    }
+  }
+  function rememberDismiss() {
+    try { localStorage.setItem(dismissKey(), String(Date.now())); } catch (e) {}
+  }
+
+  if (installedNow()) return;
+
+  var deferred = null;
+  var host = null;
+  var done = false; // [앱 설치]나 [닫기]를 누른 화면에서는 다시 띄우지 않는다
+
+  function hide() {
+    if (host && host.parentNode) host.parentNode.removeChild(host);
+    host = null;
+  }
+  function show() {
+    if (done || host || !deferred || installedNow() || dismissedRecently()) return;
+    var el = document.createElement("div");
+    if (!el.attachShadow) return;
+    el.setAttribute("data-dorm-install-banner", "");
+    el.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:900;pointer-events:none;";
+    var root = el.attachShadow({ mode: "closed" });
+    root.innerHTML =
+      "<style>" +
+      ".bar{pointer-events:auto;display:flex;align-items:center;gap:10px;margin:0 auto;max-width:720px;" +
+      "padding:calc(8px + env(safe-area-inset-top)) 12px 8px;background:#1f2937;color:#f9fafb;" +
+      "font:600 14px/1.4 'Malgun Gothic','Noto Sans KR',system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.25);" +
+      "border-radius:0 0 12px 12px}" +
+      ".msg{flex:1;min-width:0}" +
+      "button{font:inherit;border-radius:999px;padding:7px 14px;cursor:pointer;white-space:nowrap}" +
+      ".go{background:#f4b54a;color:#2a1c04;border:0;font-weight:800}" +
+      ".no{background:transparent;color:#d1d5db;border:1px solid #6b7280}" +
+      "</style>" +
+      "<div class='bar' role='region' aria-label='앱 설치 안내'>" +
+      "<span class='msg'>이 앱을 홈 화면 앱으로 설치할 수 있습니다</span>" +
+      "<button class='go' type='button'>앱 설치</button>" +
+      "<button class='no' type='button'>닫기</button>" +
+      "</div>";
+    root.querySelector(".go").addEventListener("click", function () {
+      var ev = deferred;
+      deferred = null; // 설치 창은 한 번만 띄울 수 있다
+      done = true;
+      hide();
+      if (!ev) return;
+      try {
+        Promise.resolve(ev.prompt()).then(function () { return ev.userChoice; }).catch(function () {});
+      } catch (e) {}
+    });
+    root.querySelector(".no").addEventListener("click", function () {
+      rememberDismiss();
+      deferred = null;
+      done = true;
+      hide();
+    });
+    host = el;
+    document.documentElement.appendChild(el);
+  }
+
+  window.addEventListener("beforeinstallprompt", function (e) {
+    if (installedNow()) return;
+    e.preventDefault();
+    deferred = e;
+    show();
+  });
+  window.addEventListener("appinstalled", function () {
+    deferred = null;
+    hide();
+  });
+  function hideIfInstalled() {
+    if (installedNow()) { deferred = null; hide(); }
+  }
+  try {
+    for (var j = 0; j < MODES.length; j++) {
+      window.matchMedia("(display-mode: " + MODES[j] + ")").addEventListener("change", hideIfInstalled);
+    }
+  } catch (e) {}
+})();
+</script>
+<!-- dorm-install-banner:end -->
 </body>
 </html>

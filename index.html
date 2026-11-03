@@ -1333,14 +1333,14 @@
         }
 
         // 앱 켤 때 자동 드라이브 백업 (인증·인터넷 있을 때만 조용히)
+        // 구글 모듈이 준비되는 즉시(0.1초 간격 확인, 시작 기준 10초 마감) 백업 — 앱이 뜬 직후 한 번 깜빡이고 끝나게(예전 1.5초 기다림 없앰, 2026-11-04)
         (function autoRollcallDriveBackup(){
             let cfg={}; try{ cfg=JSON.parse(localStorage.getItem('rollcallDriveCfg')||'{}'); }catch(e){}
             if(!cfg.auto||!cfg.clientId)return;
-            let tries=0;
-            const t=setInterval(()=>{ tries++;
-                if(typeof google!=="undefined"&&google.accounts&&google.accounts.oauth2){clearInterval(t); setTimeout(()=>driveBackupNow(false),1500);}
-                else if(tries>20)clearInterval(t);
-            },500);
+            const end=Date.now()+10000; // 시작 기준 10초 마감 — 지나면(타이머가 늦어져도) 이번에는 자동 백업을 하지 않는다
+            const t=setInterval(()=>{ if(Date.now()>end){ clearInterval(t); return; }
+                if(typeof google!=="undefined"&&google.accounts&&google.accounts.oauth2){clearInterval(t); driveBackupNow(false);}
+            },100);
         })();
 
 </script>

@@ -1,7 +1,7 @@
 // sw.js - 서현관아침점호v1 Service Worker
 // 공통 서비스 워커(원본: ROSA scripts/dorm-pwa/sw-template.js, 고치려면 원본을 고쳐 적용기로 다시 만든다)
 // 같은 주소(handomitoty26.github.io)의 기숙사 앱들은 캐시 저장소를 함께 쓴다 — 이 앱 캐시만 지우고, 지워졌으면 스스로 다시 채운다.
-const CACHE_NAME = 'pwa-morning-seo-v1';
+const CACHE_NAME = 'pwa-morning-seo-v2';
 const ASSETS = [
   './index.html',
   './manifest.json',

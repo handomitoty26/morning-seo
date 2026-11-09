@@ -822,7 +822,7 @@
         function changeMonth(delta) {
             calMonth += delta;
             if(calMonth < 1) { calMonth = 12; calYear--; }
-            if(calMonth > 12) { calMonth = 1; 기calYear++; }
+            if(calMonth > 12) { calMonth = 1; calYear++; }
             document.getElementById('calendar-container').innerHTML = buildCalendarHTML();
         }
 
